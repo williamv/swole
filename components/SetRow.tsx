@@ -48,14 +48,12 @@ export default function SetRow({ set, onUpdate, onComplete }: SetRowProps) {
         value={weight}
         onChange={(e) => setWeight(e.target.value)}
         onBlur={handleBlur}
-        disabled={set.is_complete}
         placeholder="0"
         className="
           w-20 h-12 text-center text-xl font-bold
           bg-zinc-800 border border-zinc-700 rounded-xl
           text-white placeholder-zinc-600
           focus:outline-none focus:border-violet-500
-          disabled:opacity-60 disabled:cursor-not-allowed
           transition-colors
         "
       />
@@ -68,22 +66,19 @@ export default function SetRow({ set, onUpdate, onComplete }: SetRowProps) {
         value={reps}
         onChange={(e) => setReps(e.target.value)}
         onBlur={handleBlur}
-        disabled={set.is_complete}
         placeholder="0"
         className="
           w-16 h-12 text-center text-xl font-bold
           bg-zinc-800 border border-zinc-700 rounded-xl
           text-white placeholder-zinc-600
           focus:outline-none focus:border-violet-500
-          disabled:opacity-60 disabled:cursor-not-allowed
           transition-colors
         "
       />
 
       <button
         onClick={handleComplete}
-        disabled={set.is_complete}
-        aria-label={set.is_complete ? 'Set complete' : 'Mark set complete'}
+        aria-label={set.is_complete ? 'Undo set' : 'Mark set complete'}
         className={`
           ml-auto w-12 h-12 rounded-full flex items-center justify-center shrink-0
           transition-all duration-150

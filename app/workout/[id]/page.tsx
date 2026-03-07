@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getDayByTag } from '@/lib/program';
@@ -13,6 +13,7 @@ export default function WorkoutPage() {
 
   const [session, setSession] = useState<WorkoutSession | null>(null);
   const [exercises, setExercises] = useState<ExerciseLogWithSets[]>([]);
+  const exerciseRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [loading, setLoading] = useState(true);
   const [finishing, setFinishing] = useState(false);
 
@@ -69,19 +70,40 @@ export default function WorkoutPage() {
   }
 
   async function handleSetComplete(setId: string) {
+    let current = false;
+    for (const ex of exercises) {
+      const s = ex.set_logs.find((s) => s.id === setId);
+      if (s) { current = s.is_complete; break; }
+    }
+    const next = !current;
+
+    // Scroll to next exercise if this one becomes fully complete
+    if (next) {
+      const exIndex = exercises.findIndex((ex) => ex.set_logs.some((s) => s.id === setId));
+      if (exIndex !== -1) {
+        const ex = exercises[exIndex];
+        const willBeComplete = ex.set_logs.every((s) => (s.id === setId ? true : s.is_complete));
+        if (willBeComplete && exIndex + 1 < exercises.length) {
+          setTimeout(() => {
+            exerciseRefs.current[exIndex + 1]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }, 200);
+        }
+      }
+    }
+
     // Optimistic update
     setExercises((prev) =>
       prev.map((ex) => ({
         ...ex,
         set_logs: ex.set_logs.map((s) =>
-          s.id === setId ? { ...s, is_complete: true } : s,
+          s.id === setId ? { ...s, is_complete: next } : s,
         ),
       })),
     );
 
     await supabase
       .from('set_logs')
-      .update({ is_complete: true })
+      .update({ is_complete: next })
       .eq('id', setId);
   }
 
@@ -148,17 +170,18 @@ export default function WorkoutPage() {
 
       {/* Exercise cards */}
       <div className="space-y-4">
-        {exercises.map((ex) => {
+        {exercises.map((ex, i) => {
           const def = programDay?.exercises.find((e) => e.name === ex.exercise_name);
           return (
-            <ExerciseCard
-              key={ex.id}
-              exercise={ex}
-              repRange={def?.repRange}
-              targetRpe={def?.sets[0]?.targetRpe}
-              onSetUpdate={handleSetUpdate}
-              onSetComplete={handleSetComplete}
-            />
+            <div key={ex.id} ref={(el) => { exerciseRefs.current[i] = el; }}>
+              <ExerciseCard
+                exercise={ex}
+                repRange={def?.repRange}
+                targetRpe={def?.sets[0]?.targetRpe}
+                onSetUpdate={handleSetUpdate}
+                onSetComplete={handleSetComplete}
+              />
+            </div>
           );
         })}
       </div>
