@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { supabase, isConfigured } from '@/lib/supabase';
 import {
   getNextDay,
   calculateWeekNumber,
@@ -30,6 +30,14 @@ export default function TodayPage() {
   }, []);
 
   async function fetchData() {
+    if (!isConfigured) {
+      setError(
+        'Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to your Vercel environment variables, then redeploy.'
+      );
+      setLoading(false);
+      return;
+    }
+
     const [completedRes, incompleteRes, firstRes] = await Promise.all([
       supabase
         .from('workout_sessions')
@@ -53,7 +61,7 @@ export default function TodayPage() {
         .maybeSingle(),
     ]);
 
-    // Check for permission errors (usually RLS)
+    // Surface any database errors
     const fetchError = completedRes.error || incompleteRes.error || firstRes.error;
     if (fetchError) {
       console.error('Fetch error:', fetchError);
@@ -64,6 +72,8 @@ export default function TodayPage() {
           'ALTER TABLE exercise_logs DISABLE ROW LEVEL SECURITY;\n' +
           'ALTER TABLE set_logs DISABLE ROW LEVEL SECURITY;'
         );
+      } else {
+        setError(`Database error: ${fetchError.message}`);
       }
     }
 

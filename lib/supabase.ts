@@ -8,4 +8,6 @@ const url =
   supabaseUrl?.startsWith('http') ? supabaseUrl : 'https://placeholder.supabase.co';
 const key = supabaseAnonKey?.length ? supabaseAnonKey : 'placeholder-anon-key';
 
+export const isConfigured = Boolean(supabaseUrl?.startsWith('http') && supabaseAnonKey?.length);
+
 export const supabase = createClient(url, key);
