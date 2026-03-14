@@ -34,7 +34,8 @@ create index on exercise_logs (workout_id);
 create index on exercise_logs (exercise_name);
 create index on set_logs (exercise_id);
 
--- If using RLS, disable it for a personal app with no auth:
--- alter table workout_sessions disable row level security;
--- alter table exercise_logs disable row level security;
--- alter table set_logs disable row level security;
+-- Disable RLS for a personal app with no auth.
+-- Supabase enables RLS by default; without this, all queries are blocked.
+alter table workout_sessions disable row level security;
+alter table exercise_logs disable row level security;
+alter table set_logs disable row level security;
