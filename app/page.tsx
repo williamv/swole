@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { supabase, isConfigured } from '@/lib/supabase';
 import {
   getNextDay,
   calculateWeekNumber,
@@ -20,6 +20,7 @@ export default function TodayPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [lastCompleted, setLastCompleted] = useState<WorkoutSession | null>(null);
   const [incompleteSession, setIncompleteSession] = useState<WorkoutSession | null>(null);
   const [firstSessionDate, setFirstSessionDate] = useState<string | null>(null);
@@ -29,7 +30,15 @@ export default function TodayPage() {
   }, []);
 
   async function fetchData() {
-    const [{ data: completed }, { data: incomplete }, { data: first }] = await Promise.all([
+    if (!isConfigured) {
+      setError(
+        'Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to your Vercel environment variables, then redeploy.'
+      );
+      setLoading(false);
+      return;
+    }
+
+    const [completedRes, incompleteRes, firstRes] = await Promise.all([
       supabase
         .from('workout_sessions')
         .select('*')
@@ -52,9 +61,25 @@ export default function TodayPage() {
         .maybeSingle(),
     ]);
 
-    setLastCompleted(completed);
-    setIncompleteSession(incomplete);
-    setFirstSessionDate(first?.date ?? null);
+    // Surface any database errors
+    const fetchError = completedRes.error || incompleteRes.error || firstRes.error;
+    if (fetchError) {
+      console.error('Fetch error:', fetchError);
+      if (fetchError.message?.includes('permission') || fetchError.code === '42501') {
+        setError(
+          'Database permission error. Run this SQL in your Supabase SQL editor:\n' +
+          'ALTER TABLE workout_sessions DISABLE ROW LEVEL SECURITY;\n' +
+          'ALTER TABLE exercise_logs DISABLE ROW LEVEL SECURITY;\n' +
+          'ALTER TABLE set_logs DISABLE ROW LEVEL SECURITY;'
+        );
+      } else {
+        setError(`Database error: ${fetchError.message}`);
+      }
+    }
+
+    setLastCompleted(completedRes.data);
+    setIncompleteSession(incompleteRes.data);
+    setFirstSessionDate(firstRes.data?.date ?? null);
     setLoading(false);
   }
 
@@ -117,8 +142,20 @@ export default function TodayPage() {
       if (setErr) throw setErr;
 
       router.push(`/workout/${session.id}`);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to start workout:', err);
+      const message =
+        err instanceof Error ? err.message : String(err);
+      if (message.includes('row-level security') || message.includes('RLS') || message.includes('new row violates')) {
+        setError(
+          'Database permission error. Run this SQL in your Supabase SQL editor:\n' +
+          'ALTER TABLE workout_sessions DISABLE ROW LEVEL SECURITY;\n' +
+          'ALTER TABLE exercise_logs DISABLE ROW LEVEL SECURITY;\n' +
+          'ALTER TABLE set_logs DISABLE ROW LEVEL SECURITY;'
+        );
+      } else {
+        setError(`Failed to start workout: ${message}`);
+      }
       setStarting(false);
     }
   }
@@ -171,6 +208,13 @@ export default function TodayPage() {
           ))}
         </ul>
       </div>
+
+      {/* Error message */}
+      {error && (
+        <div className="bg-red-900/50 border border-red-700 rounded-2xl p-4">
+          <p className="text-red-300 text-sm font-medium whitespace-pre-line">{error}</p>
+        </div>
+      )}
 
       {/* Action button */}
       {incompleteSession ? (
