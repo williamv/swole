@@ -5,7 +5,11 @@ import { useRouter, useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getDayByTag } from '@/lib/program';
 import ExerciseCard from '@/components/ExerciseCard';
-import type { WorkoutSession, ExerciseLogWithSets, SetLog } from '@/lib/types';
+import PlateSettingsBar from '@/components/PlateSettingsBar';
+import { generateWarmupRamp, getInventory } from '@/lib/plates';
+import { loadPlateSettings, savePlateSettings } from '@/lib/plateSettings';
+import type { PlateMode, WarmupStep } from '@/lib/plates';
+import type { WorkoutSession, ExerciseLogWithSets } from '@/lib/types';
 
 export default function WorkoutPage() {
   const { id } = useParams<{ id: string }>();
@@ -16,10 +20,28 @@ export default function WorkoutPage() {
   const exerciseRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [loading, setLoading] = useState(true);
   const [finishing, setFinishing] = useState(false);
+  const [plateMode, setPlateMode] = useState<PlateMode>('home');
+  const [minimizeChanges, setMinimizeChanges] = useState(false);
+
+  useEffect(() => {
+    const settings = loadPlateSettings();
+    setPlateMode(settings.mode);
+    setMinimizeChanges(settings.minimizeChanges);
+  }, []);
 
   useEffect(() => {
     if (id) fetchWorkout(id);
   }, [id]);
+
+  function handleModeChange(mode: PlateMode) {
+    setPlateMode(mode);
+    savePlateSettings({ mode, minimizeChanges });
+  }
+
+  function handleMinimizeChange(val: boolean) {
+    setMinimizeChanges(val);
+    savePlateSettings({ mode: plateMode, minimizeChanges: val });
+  }
 
   async function fetchWorkout(workoutId: string) {
     const { data, error } = await supabase
@@ -131,6 +153,25 @@ export default function WorkoutPage() {
 
   const programDay = session ? getDayByTag(session.day_tag) : undefined;
 
+  // Compute warmup ramp for each barbell exercise
+  const inventory = getInventory(plateMode);
+  const warmupStepsMap = new Map<string, WarmupStep[]>();
+  let prevWorkPlates: number[] = [];
+
+  for (const ex of exercises) {
+    const def = programDay?.exercises.find((e) => e.name === ex.exercise_name);
+    if (def?.equipment !== 'barbell') continue;
+
+    const workWeight = ex.set_logs[0]?.weight ?? 0;
+    if (workWeight <= 0) continue;
+
+    const steps = generateWarmupRamp(workWeight, inventory, minimizeChanges, prevWorkPlates);
+    warmupStepsMap.set(ex.id, steps);
+
+    const workStep = steps.find((s) => s.isWork);
+    if (workStep) prevWorkPlates = workStep.plates.perSide;
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -168,6 +209,14 @@ export default function WorkoutPage() {
         </div>
       </div>
 
+      {/* Plate settings */}
+      <PlateSettingsBar
+        mode={plateMode}
+        minimizeChanges={minimizeChanges}
+        onModeChange={handleModeChange}
+        onMinimizeChange={handleMinimizeChange}
+      />
+
       {/* Exercise cards */}
       <div className="space-y-4">
         {exercises.map((ex, i) => {
@@ -180,6 +229,8 @@ export default function WorkoutPage() {
                 targetRpe={def?.sets[0]?.targetRpe}
                 onSetUpdate={handleSetUpdate}
                 onSetComplete={handleSetComplete}
+                warmupSteps={warmupStepsMap.get(ex.id)}
+                showPlateDeltas={minimizeChanges}
               />
             </div>
           );

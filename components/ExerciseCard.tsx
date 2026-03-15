@@ -1,8 +1,10 @@
 'use client';
 
 import SetRow from './SetRow';
+import PlateDisplay from './PlateDisplay';
 import { categoryLabel, categoryColor, type ExerciseCategory } from '@/lib/program';
 import type { ExerciseLogWithSets } from '@/lib/types';
+import type { WarmupStep } from '@/lib/plates';
 
 interface ExerciseCardProps {
   exercise: ExerciseLogWithSets;
@@ -10,6 +12,8 @@ interface ExerciseCardProps {
   targetRpe?: number;
   onSetUpdate: (setId: string, weight: number, reps: number) => void;
   onSetComplete: (setId: string) => void;
+  warmupSteps?: WarmupStep[];
+  showPlateDeltas?: boolean;
 }
 
 export default function ExerciseCard({
@@ -18,6 +22,8 @@ export default function ExerciseCard({
   targetRpe,
   onSetUpdate,
   onSetComplete,
+  warmupSteps,
+  showPlateDeltas = false,
 }: ExerciseCardProps) {
   const completedCount = exercise.set_logs.filter((s) => s.is_complete).length;
   const totalCount = exercise.set_logs.length;
@@ -59,6 +65,11 @@ export default function ExerciseCard({
           </span>
         </div>
       </div>
+
+      {/* Plate display */}
+      {warmupSteps && warmupSteps.length > 0 && (
+        <PlateDisplay steps={warmupSteps} showDeltas={showPlateDeltas} />
+      )}
 
       {/* Divider */}
       <div className="h-px bg-zinc-800" />
